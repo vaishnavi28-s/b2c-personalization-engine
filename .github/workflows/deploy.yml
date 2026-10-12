@@ -58,7 +58,7 @@ jobs:
           --setting TASTE_EPOCHS=10 --setting BASKET_EPOCHS=10 --setting EVAL_USERS=5000
       - name: Integration tests on real Snowflake data
         run: pytest tests/integration -m integration --junitxml=reports/integration.xml
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with: { name: integration-test-report, path: reports/ }
       - name: Remove the temporary schema

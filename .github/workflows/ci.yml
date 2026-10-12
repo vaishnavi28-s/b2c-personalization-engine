@@ -42,7 +42,7 @@ jobs:
       - run: bash ci/install_lightfm.sh
       - name: Unit tests (rules, evaluation, email, settings, deploy manifest, monitoring config)
         run: pytest tests/unit --junitxml=reports/unit.xml
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with: { name: unit-test-report, path: reports/ }
 
