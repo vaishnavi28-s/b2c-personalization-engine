@@ -1,12 +1,37 @@
-# Weekly pull requests for outdated dependencies; each one goes through CI like any other change.
+# Monthly, grouped pull requests for outdated dependencies; each one goes through CI like any other change.
+# numpy / pandas / scipy are pinned to what Snowflake's Python 3.10 runtime runs (the procedures run there):
+# only patch updates for them - a minor/major jump is a decision, made together with the Snowflake runtime.
 version: 2
 updates:
-  - package-ecosystem: github-actions
-    directory: /
-    schedule: { interval: weekly }
-  - package-ecosystem: pip
-    directory: /
-    schedule: { interval: weekly }
-  - package-ecosystem: docker
-    directory: /airflow
-    schedule: { interval: weekly }
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    ignore:
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "pandas"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "scipy"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "setuptools"              # lightfm's old build needs it (ci/install_lightfm.sh)
+        update-types: ["version-update:semver-major"]
+    groups:
+      python-dev-tools:
+        patterns: ["*"]
+
+  - package-ecosystem: "docker"
+    directory: "/airflow"
+    schedule:
+      interval: "monthly"
+    ignore:
+      - dependency-name: "apache/airflow"          # a new Airflow major is a planned upgrade, not a bot PR
+        update-types: ["version-update:semver-major"]
