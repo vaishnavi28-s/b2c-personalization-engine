@@ -1,0 +1,92 @@
+# =====================================================================================
+# Deploy the Snowflake code: every merge to main that touches it.
+#
+#   ci (all checks) -> integration tests in a NEW temporary schema on real data -> DEV -> [approval] -> PROD
+#
+# - Logins: the key pair of NBO_CI_SVC from GitHub Secrets (no password anywhere)
+# - Only one deploy at a time (concurrency); a newer merge waits instead of running in parallel
+# - Every schema records the git commit it runs (NBO_DEPLOYMENTS); rollback = re-run this workflow on an older
+#   commit (Actions > deploy > Run workflow > pick the commit / tag)
+# - PROD needs a person to approve (GitHub environment "production" with required reviewers)
+# =====================================================================================
+name: deploy
+
+on:
+  push:
+    branches: [main]
+    paths: ["snowflake/**", "deploy/**", "ci/smoke.py", "tests/integration/**", "requirements-dev.txt",
+            ".github/workflows/deploy.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: snowflake-deploy
+  cancel-in-progress: false
+
+env:
+  SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+  SNOWFLAKE_USER: NBO_CI_SVC
+  SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_CI_PRIVATE_KEY }}
+  SNOWFLAKE_PRIVATE_KEY_PASSPHRASE: ${{ secrets.SNOWFLAKE_CI_KEY_PASSPHRASE }}
+  SNOWFLAKE_ROLE: ACCOUNTADMIN
+  SNOWFLAKE_WAREHOUSE: NBO_WH
+  SNOWFLAKE_DATABASE: NBO_REBUILD
+  NBO_DEPLOY_SOURCE: github-actions run ${{ github.run_id }}
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  integration:
+    needs: ci
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      NBO_TEST_SCHEMA: HM_ML_CI_${{ github.run_id }}
+      NBO_TEST_DATE: "2020-06-01"
+      NBO_TEST_CUSTOMERS: "500"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.10", cache: pip, cache-dependency-path: requirements-dev.txt }
+      - run: pip install -r requirements-dev.txt
+      - name: Deploy to a temporary schema (real code, fewer epochs, reference tables cloned from PROD)
+        run: >-
+          python deploy/deploy.py deploy --schema "$NBO_TEST_SCHEMA" --reference-from HM_ML
+          --setting TASTE_EPOCHS=10 --setting BASKET_EPOCHS=10 --setting EVAL_USERS=5000
+      - name: Integration tests on real Snowflake data
+        run: pytest tests/integration -m integration --junitxml=reports/integration.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: integration-test-report, path: reports/ }
+      - name: Remove the temporary schema
+        if: always()
+        run: python deploy/deploy.py drop --schema "$NBO_TEST_SCHEMA"
+
+  deploy-dev:
+    needs: integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: dev
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.10", cache: pip, cache-dependency-path: requirements-dev.txt }
+      - run: pip install -r requirements-dev.txt
+      - run: python deploy/deploy.py deploy --schema HM_ML_DEV --reference-from HM_ML   # DEV mirrors PROD's reference tables
+      - run: python ci/smoke.py --schema HM_ML_DEV
+
+  deploy-prod:
+    needs: deploy-dev
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.10", cache: pip, cache-dependency-path: requirements-dev.txt }
+      - run: pip install -r requirements-dev.txt
+      - run: python deploy/deploy.py deploy --schema HM_ML --allow-prod
+      - run: python ci/smoke.py --schema HM_ML

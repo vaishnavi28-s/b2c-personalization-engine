@@ -1,0 +1,13 @@
+# Dashboards are files in git (monitoring/grafana/dashboards/*.json). Changes made in the UI cannot be saved:
+# change the file, open a pull request, deploy - so what you see is always what is reviewed.
+apiVersion: 1
+
+providers:
+  - name: nbo
+    folder: NBO
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 60
+    options:
+      path: /var/lib/grafana/dashboards

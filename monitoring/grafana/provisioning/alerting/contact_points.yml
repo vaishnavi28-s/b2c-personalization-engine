@@ -1,0 +1,13 @@
+# Where alerts go. One email channel; the address comes from .env (GF_ALERT_EMAIL).
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: nbo-email
+    receivers:
+      - uid: nbo-email
+        type: email
+        settings:
+          addresses: $GF_ALERT_EMAIL
+          singleEmail: true
+        disableResolveMessage: false

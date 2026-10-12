@@ -1,0 +1,106 @@
+# =====================================================================================
+# CI: runs on every pull request (and is reused by deploy.yml before anything is deployed).
+# Nothing here needs Snowflake: code style, unit tests, DAG tests in the real Airflow image,
+# monitoring SQL on a real Postgres, and validation of every config file. All jobs must pass to merge.
+# =====================================================================================
+name: ci
+
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.10" }
+      - run: pip install ruff==0.17.0
+      - name: Code style and bug checks (ruff)
+        run: ruff check --output-format=github .
+
+  unit-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"                 # Snowflake's runtime for the procedures
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: bash ci/install_lightfm.sh
+      - name: Unit tests (rules, evaluation, email, settings, deploy manifest, monitoring config)
+        run: pytest tests/unit --junitxml=reports/unit.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: unit-test-report, path: reports/ }
+
+  monitoring-sql:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17.6
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.10", cache: pip, cache-dependency-path: requirements-dev.txt }
+      - run: pip install pytest==9.1.1 pyyaml==6.0.3 psycopg2-binary==2.9.13
+      - name: Reporting schema + every dashboard and alert query on a real Postgres
+        env:
+          REPORTING_TEST_DSN: postgresql://postgres:postgres@localhost:5432/postgres
+        run: pytest tests/monitoring
+
+  dag-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the Airflow image (test stage)
+        uses: docker/build-push-action@v6
+        with:
+          context: airflow
+          target: test
+          tags: nbo-airflow:test
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: DAG tests inside the production image
+        run: >-
+          docker run --rm -v "$PWD:/repo" -w /repo -e AIRFLOW__CORE__LOAD_EXAMPLES=False
+          nbo-airflow:test python -m pytest tests/dags -p no:cacheprovider
+
+  config-checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Prometheus config and rules (promtool)
+        run: >-
+          docker run --rm -v "$PWD/monitoring/prometheus:/etc/prometheus" --entrypoint promtool
+          prom/prometheus:v3.5.5 check config /etc/prometheus/prometheus.yml
+      - name: StatsD mapping (statsd-exporter)
+        run: >-
+          docker run --rm -v "$PWD/monitoring/statsd:/etc/statsd" prom/statsd-exporter:v0.31.0
+          --check-config --statsd.mapping-config=/etc/statsd/mapping.yml
+      - name: docker-compose file (with placeholder values)
+        run: |
+          sed -E 's/=$/=ci-placeholder/; s/^(SMTP_PORT)=.*/\1=587/' .env.example > /tmp/ci.env
+          docker compose --env-file /tmp/ci.env config --quiet

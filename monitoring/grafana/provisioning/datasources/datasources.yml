@@ -1,0 +1,28 @@
+# Data sources, created by Grafana at start-up (nobody clicks them together). Passwords come from the environment.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 30s
+
+  - name: Reporting
+    uid: reporting
+    type: grafana-postgresql-datasource
+    access: proxy
+    url: reporting-db:5432
+    user: grafana_reader                      # read-only login: Grafana can never change the numbers
+    editable: false
+    jsonData:
+      database: reporting
+      sslmode: disable                        # inside the private Docker network only
+      postgresVersion: 1700
+      maxOpenConns: 5
+    secureJsonData:
+      password: $REPORTING_READER_PASSWORD

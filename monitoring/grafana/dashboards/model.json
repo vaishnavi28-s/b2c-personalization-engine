@@ -1,0 +1,497 @@
+{
+  "uid": "nbo-model",
+  "title": "NBO - Models and recommendations",
+  "description": "Model checks, gate and slot health",
+  "tags": [
+    "nbo",
+    "model"
+  ],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "",
+  "time": {
+    "from": "2019-09-15T00:00:00.000Z",
+    "to": "2020-10-15T00:00:00.000Z"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 2
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Are the models and the emails healthy?** Training on the 1st of each month is checked on the 15 days after the check date (precision@5) and compared with the simplest alternative - showing everyone the best sellers of the week before, scored on the same customers. The gate keeps last month's models if the new one is more than 20% worse. Lower rows: what the 6 slots actually filled, per send date."
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Model check: precision@5 vs best sellers",
+      "description": "Share of the top 5 picks the customer actually bought in the next 15 days. Each model should stay above its best-seller line.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "reporting"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 2,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "reporting"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT model_date::timestamp AS time, taste_p5 AS \"taste (slots 1, 2, 5, 6)\",\n               taste_base_p5 AS \"best sellers (taste customers)\", basket_p5 AS \"basket (slot 3)\",\n               basket_base_p5 AS \"best sellers (basket customers)\"\n        FROM reporting.model_registry WHERE $__timeFilter(model_date) ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percentunit",
+          "decimals": 2,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "pointSize": 6,
+            "showPoints": "always",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Trainings and gate decisions",
+      "description": "FAIL = the new models were not used (model_used shows which ones were). beats_best_sellers NO = a model does not beat the best sellers (baseline_note says which).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "reporting"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 2,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "reporting"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT model_date, gate_status, model_used,\n               CASE WHEN beats_baseline THEN 'yes' WHEN NOT beats_baseline THEN 'NO' END AS beats_best_sellers,\n               round(taste_p5::numeric, 4) AS taste_p5, round(taste_base_p5::numeric, 4) AS taste_best_sellers,\n               round(prev_taste_p5::numeric, 4) AS last_month_taste, round(basket_p5::numeric, 4) AS basket_p5,\n               round(basket_base_p5::numeric, 4) AS basket_best_sellers,\n               round(prev_basket_p5::numeric, 4) AS last_month_basket, taste_customers, round(minutes::numeric, 1)\n               AS minutes, code_version, gate_reason, baseline_note\n        FROM reporting.model_registry WHERE $__timeFilter(model_date) ORDER BY model_date DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "status|gate_status"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "SUCCESS": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "PASS": {
+                        "color": "green",
+                        "index": 1
+                      },
+                      "WARN": {
+                        "color": "orange",
+                        "index": 2
+                      },
+                      "SKIPPED": {
+                        "color": "blue",
+                        "index": 3
+                      },
+                      "PENDING": {
+                        "color": "blue",
+                        "index": 4
+                      },
+                      "FAILED": {
+                        "color": "red",
+                        "index": 5
+                      },
+                      "FAIL": {
+                        "color": "red",
+                        "index": 6
+                      },
+                      "SENT": {
+                        "color": "green",
+                        "index": 7
+                      },
+                      "READY": {
+                        "color": "blue",
+                        "index": 8
+                      },
+                      "SENDING": {
+                        "color": "orange",
+                        "index": 9
+                      },
+                      "DRY_RUN": {
+                        "color": "text",
+                        "index": 10
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Slot filled by its own logic (not a fallback)",
+      "description": "Low = the slot mostly fell back (e.g. trending list too thin for an age group).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "reporting"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "reporting"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT run_date::timestamp AS time, 'slot ' || substr(metric, 5, 1) AS metric, 1 - value AS value\n        FROM reporting.run_metrics WHERE metric LIKE 'slot%_fallback_rate' AND $__timeFilter(run_date)\n        ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "pointSize": 6,
+            "showPoints": "always",
+            "spanNulls": true
+          },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Output checks",
+      "description": "emails_complete_share must be >= 99%; top_product_share must stay under the 20% cap.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "reporting"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 10,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "reporting"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT run_date::timestamp AS time, metric, value FROM reporting.run_metrics\n        WHERE metric IN ('emails_complete_share', 'top_product_share', 'cold_start_share', 'section_default_share')\n          AND $__timeFilter(run_date) ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "pointSize": 6,
+            "showPoints": "always",
+            "spanNulls": true
+          },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "barchart",
+      "title": "Slots 5 and 6: how the 'new to try' pick was found",
+      "description": "AND = new type and colour, OR = new type or colour, best = nothing new left.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "reporting"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "reporting"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT run_date::text AS send, slot::text || ' ' || rule AS rule, cards FROM reporting.slot_mix\n        WHERE slot IN (5, 6) AND $__timeFilter(run_date) ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "custom": {
+            "fillOpacity": 80
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "stacking": "percent",
+        "xField": "send",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Customers per send",
+      "description": "Holdout should stay about 5% of all customers picked.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "reporting"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 18,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "reporting"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT run_date::timestamp AS time, metric, value FROM reporting.run_metrics\n        WHERE metric IN ('customers_email', 'customers_holdout', 'distinct_products') AND $__timeFilter(run_date)\n        ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "pointSize": 6,
+            "showPoints": "always",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ],
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "title": "NBO dashboards",
+      "type": "dashboards",
+      "tags": [
+        "nbo"
+      ],
+      "asDropdown": true
+    }
+  ]
+}

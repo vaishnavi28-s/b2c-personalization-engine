@@ -1,0 +1,15 @@
+# Routing: critical alerts repeat every hour until fixed, warnings once a day.
+apiVersion: 1
+
+policies:
+  - orgId: 1
+    receiver: nbo-email
+    group_by: ["alertname"]
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 24h
+    routes:
+      - receiver: nbo-email
+        object_matchers:
+          - ["severity", "=", "critical"]
+        repeat_interval: 1h

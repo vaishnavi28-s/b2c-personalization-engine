@@ -1,0 +1,3 @@
+# Shell scripts run inside Linux (GitHub Actions, the Postgres container): they must keep Unix line endings
+# even when the repo is checked out on Windows, or bash fails with "$'\r': command not found".
+*.sh text eol=lf

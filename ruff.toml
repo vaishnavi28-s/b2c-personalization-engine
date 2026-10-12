@@ -1,0 +1,23 @@
+# Code style + bug checks, run on every pull request (CI fails on any finding).
+line-length = 150
+target-version = "py310"          # Snowflake's Python runtime for the procedures
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "S"]
+ignore = [
+    "S608",    # SQL built from strings: inputs are dates / ids validated before use, Snowflake procedures need it
+    "S101",    # assert is how pytest tests are written
+    "UP035",
+    "E731",
+    "B905",    # zip() without strict=: lengths are equal by construction in this code
+]
+
+[lint.per-file-ignores]
+"tests/**" = ["S", "B018"]
+"snowflake/python/inference.py" = ["S324"]        # md5 only buckets customers into the holdout, not security
+"snowflake/python/model_training.py" = ["S301"]   # pickle loads only our own models from our own stage
+"deploy/deploy.py" = ["S603", "S607"]             # runs `git` to read the commit id
+
+[lint.isort]
+known-first-party = ["model_training", "inference", "evaluation", "emails", "ops", "deploy", "snowflake_conn",
+                     "nbo"]

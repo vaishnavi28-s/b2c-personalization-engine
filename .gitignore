@@ -1,0 +1,33 @@
+# secrets: never in git
+.env
+*.env
+!.env.example
+secrets/*
+!secrets/README.txt
+*.p8
+*.pem
+kaggle.json
+snowflake/environment.sql
+**/connections.toml
+**/config.toml
+
+# data, models, generated files
+*.pkl
+*.csv
+data/
+models/
+reports/
+
+# tools
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+.vscode/
+.idea/
+
+# local runtime state
+airflow/logs/
+monitoring/grafana/data/

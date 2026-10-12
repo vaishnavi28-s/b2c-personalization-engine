@@ -1,0 +1,7 @@
+# Providers on top of the official Airflow image. Versions come from Airflow's constraint file (see Dockerfile).
+apache-airflow-providers-snowflake
+apache-airflow-providers-postgres
+apache-airflow-providers-smtp
+apache-airflow-providers-git
+apache-airflow-providers-celery
+apache-airflow-providers-fab

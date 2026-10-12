@@ -1,0 +1,67 @@
+# =====================================================================================
+# Monthly rehearsal: on the 28th, the full pipeline runs in DEV on the date production trains next
+# (real settings, real data), then every integration test checks the result. The result is written to
+# HM_ML_DEV.NBO_RUN_LOG (CI_REHEARSAL); with the Airflow switch nbo_require_dev_rehearsal on, production
+# does not train before the rehearsal for that date passed. A failure emails the repository owner (GitHub).
+# Run by hand for any retrain date: Actions > rehearsal > Run workflow.
+# =====================================================================================
+name: rehearsal
+
+on:
+  schedule:
+    - cron: "0 3 28 * *"
+  workflow_dispatch:
+    inputs:
+      run_date:
+        description: "Retrain date to rehearse (YYYY-MM-DD). Empty = the next one production has not trained."
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: snowflake-deploy          # never at the same time as a deploy
+  cancel-in-progress: false
+
+env:
+  SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+  SNOWFLAKE_USER: NBO_CI_SVC
+  SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_CI_PRIVATE_KEY }}
+  SNOWFLAKE_PRIVATE_KEY_PASSPHRASE: ${{ secrets.SNOWFLAKE_CI_KEY_PASSPHRASE }}
+  SNOWFLAKE_ROLE: ACCOUNTADMIN
+  SNOWFLAKE_WAREHOUSE: NBO_WH
+  SNOWFLAKE_DATABASE: NBO_REBUILD
+
+jobs:
+  rehearse:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    environment: dev
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.10", cache: pip, cache-dependency-path: requirements-dev.txt }
+      - run: pip install -r requirements-dev.txt
+      - name: Which date
+        id: date
+        run: |
+          d="${{ inputs.run_date }}"
+          if [ -z "$d" ]; then d=$(python ci/rehearsal.py next); fi
+          echo "date=$d" >> "$GITHUB_OUTPUT"
+          if [ -z "$d" ]; then echo "::notice::Production has trained every calendar date - nothing to rehearse"; fi
+      - name: Full pipeline + integration tests in DEV (real settings)
+        if: steps.date.outputs.date != ''
+        env:
+          NBO_TEST_SCHEMA: HM_ML_DEV
+          NBO_TEST_DATE: ${{ steps.date.outputs.date }}
+          NBO_TEST_CUSTOMERS: "5000"
+        run: pytest tests/integration -m integration --junitxml=reports/rehearsal.xml
+      - name: Record PASS
+        if: success() && steps.date.outputs.date != ''
+        run: python ci/rehearsal.py record --date "${{ steps.date.outputs.date }}" --status SUCCESS
+      - name: Record FAIL
+        if: failure() && steps.date.outputs.date != ''
+        run: python ci/rehearsal.py record --date "${{ steps.date.outputs.date }}" --status FAILED
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: rehearsal-report, path: reports/, if-no-files-found: ignore }
