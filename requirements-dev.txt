@@ -1,7 +1,7 @@
 # Test / lint environment for CI and laptops. Python 3.10 and the numpy / scipy / pandas line of Snowflake's
 # Python 3.10 runtime, so the unit tests run the procedure code on the same library versions it meets in
 # Snowflake. lightfm: install with ci/install_lightfm.sh (PyPI has no wheel for it).
-numpy==1.26.4
+numpy==2.5.3
 scipy==1.13.1
 pandas==2.2.3
 cython==3.3.0
