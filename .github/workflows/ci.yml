@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with: { python-version: "3.10" }
       - run: pip install ruff==0.17.0
       - name: Code style and bug checks (ruff)
@@ -33,7 +33,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.10"                 # Snowflake's runtime for the procedures
           cache: pip
@@ -59,7 +59,7 @@ jobs:
           --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with: { python-version: "3.10", cache: pip, cache-dependency-path: requirements-dev.txt }
       - run: pip install pytest==9.1.1 pyyaml==6.0.3 psycopg2-binary==2.9.13
       - name: Reporting schema + every dashboard and alert query on a real Postgres
