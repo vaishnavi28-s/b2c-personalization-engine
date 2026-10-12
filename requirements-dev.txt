@@ -3,7 +3,7 @@
 # Snowflake. lightfm: install with ci/install_lightfm.sh (PyPI has no wheel for it).
 numpy==1.26.4
 scipy==1.13.1
-pandas==2.2.3
+pandas==3.0.6
 cython==3.3.0
 setuptools==79.0.1
 pytest==9.1.1
