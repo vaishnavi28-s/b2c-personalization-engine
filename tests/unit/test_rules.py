@@ -230,3 +230,23 @@ def test_unknown_colour_is_not_shown_to_the_customer():
     html = emails.card(r, None)
     assert "unknown" not in html.lower() and ">dress<" in html
     assert "black &middot; dress" in emails.card(r._replace(COLOUR="Black"), None)
+
+
+
+def test_every_occasion_has_short_slot_labels():
+    """Every occasion the email knows gets its own slot 6 label, and no slot label is too long for one line on a
+    card (a wrapped label pushes that card's photo down and the row no longer lines up)."""
+    import emails
+    for occasion in emails.HEADLINES:
+        assert occasion in inf.NEW_FOR, occasion
+        assert "in season now" not in inf.NEW_FOR[occasion].lower()
+    labels = [s for s in inf.SLOTS.values() if "{" not in s] + list(inf.NEW_FOR.values()) + [inf.NEW_FOR_DEFAULT]
+    labels += [o for o in inf.NEW_FOR]                                   # slot 2 shows the occasion itself
+    assert max(len(x) for x in labels) <= 28, max(labels, key=len)
+
+
+def test_card_label_never_wraps():
+    import emails
+    Card = namedtuple("Card", "PROD_NAME COLOUR TYPE SLOT")
+    html = emails.card(Card("Shirt", "blue", "shirt", "New for the festive weeks"), "")
+    assert "white-space:nowrap" in html and "NEW FOR THE FESTIVE WEEKS" in html
