@@ -8,6 +8,10 @@ Every export writes a row to reporting.export_log - Grafana alerts when the copy
 
 Each entry: Postgres table -> Snowflake SELECT whose columns match monitoring/postgres/init.sql (types converted
 here, so Grafana gets real dates and timestamps). The HTML of the emails is never copied.
+
+Rows are inserted with a plain INSERT, not pandas.to_sql: to_sql guesses each column's type from the data, and a
+column that is empty in every row (e.g. PREV_TASTE_P5 while only the first model exists) is guessed as text, which
+Postgres rejects for a number column. A plain INSERT sends an empty value as NULL and lets the table decide.
 """
 import logging
 
@@ -58,6 +62,17 @@ EXPORTS = {
 }
 
 
+def insert_sql(name, columns):
+    """INSERT for reporting.<name> with one named parameter per column (types come from the table, not the data)."""
+    return (f"INSERT INTO reporting.{name} ({', '.join(columns)}) "
+            f"VALUES ({', '.join(f'%({c})s' for c in columns)})")
+
+
+def rows(df):
+    """DataFrame -> list of dicts with plain Python values; NaN / NaT become None (NULL in Postgres)."""
+    return df.astype(object).where(pd.notna(df), None).to_dict("records")
+
+
 def export_table(name):
     """Snowflake -> Postgres reporting.<name>, replaced in one transaction. Returns the row count."""
     from airflow.providers.postgres.hooks.postgres import PostgresHook
@@ -65,12 +80,11 @@ def export_table(name):
 
     df = sf.query(EXPORTS[name])
     df.columns = [c.lower() for c in df.columns]
-    df = df.astype(object).where(pd.notna(df), None)
     engine = PostgresHook(postgres_conn_id=POSTGRES_CONN).get_sqlalchemy_engine()
     with engine.begin() as con:                                   # one transaction: all or nothing
         con.execute(text(f"TRUNCATE reporting.{name}"))
         if len(df):
-            df.to_sql(name, con, schema="reporting", if_exists="append", index=False, method="multi", chunksize=1000)
+            con.exec_driver_sql(insert_sql(name, list(df.columns)), rows(df))
         con.execute(text("INSERT INTO reporting.export_log (table_name, rows_exported, exported_at) "
                          "VALUES (:t, :n, NOW())"), {"t": name, "n": len(df)})
         con.execute(text("DELETE FROM reporting.export_log WHERE table_name = :t "

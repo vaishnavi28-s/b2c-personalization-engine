@@ -116,3 +116,29 @@ def test_grafana_reader_cannot_write(db):
     db.execute("SELECT has_table_privilege('grafana_reader', 'reporting.run_log', 'INSERT'), "
                "has_table_privilege('grafana_reader', 'reporting.run_log', 'SELECT')")
     assert db.fetchone() == (False, True)
+
+
+def test_export_insert_accepts_a_column_that_is_empty_in_every_row(db):
+    """The first model has no previous model: PREV_* is empty in every row. The export must still load it (pandas
+    to_sql guessed such a column as text and Postgres refused it for a number column)."""
+    pd = pytest.importorskip("pandas")
+    pytest.importorskip("pendulum")
+    from nbo import reporting
+
+    first_model = pd.DataFrame([{
+        "model_date": "2019-10-01", "trained_at": pd.Timestamp("2026-10-12 13:28:30"), "gate_status": "PASS",
+        "gate_reason": "first model", "check_trained_to": "2019-09-16", "taste_p5": 0.0055,
+        "taste_check_customers": 19637, "basket_p5": 0.011, "basket_check_customers": 11418,
+        "prev_taste_p5": None, "prev_basket_p5": float("nan"), "model_used": "2019-10-01",
+        "taste_customers": 327283, "taste_items": 7761, "basket_customers": 181668, "basket_items": 500,
+        "minutes": 22.1, "code_version": "abc123", "taste_base_p5": 0.0057, "basket_base_p5": 0.0361,
+        "beats_baseline": False, "baseline_note": "below best sellers"}])
+    db.execute("BEGIN")                                  # rolled back: the alert tests above count these rows
+    try:
+        db.executemany(reporting.insert_sql("model_registry", list(first_model.columns)),
+                       reporting.rows(first_model))
+        db.execute("SELECT prev_taste_p5, prev_basket_p5, taste_p5 FROM reporting.model_registry "
+                   "WHERE model_date = '2019-10-01'")
+        assert db.fetchone() == (None, None, 0.0055)
+    finally:
+        db.execute("ROLLBACK")

@@ -54,7 +54,8 @@ def card(r, img):
            f'height:auto;border:0;background:#ece8e2;">' if img else
            '<div style="width:100%;height:320px;background:#ece8e2;"></div>')
     return ('<td width="50%" valign="top" style="padding:10px;">'
-            f'<div style="font:600 11px Arial,Helvetica,sans-serif;letter-spacing:1.5px;color:#8a7f72;padding:0 0 6px;">{label}</div>'
+            f'<div style="font:600 11px Arial,Helvetica,sans-serif;letter-spacing:1.5px;color:#8a7f72;padding:0 0 6px;'
+            f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{label}</div>'
             f'{pic}'
             f'<div style="font:600 15px Georgia,serif;color:#1f1d1a;padding:10px 0 2px;">{name}</div>'
             f'<div style="font:13px Arial,Helvetica,sans-serif;color:#6b645b;padding:0 0 10px;">{sub}</div></td>')

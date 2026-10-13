@@ -33,7 +33,14 @@ import pandas as pd
 import model_training as mt
 
 SLOTS = {1: "Your style", 2: "{occ}", 3: "Popular with people like you", 4: "Trending for you",
-         5: "Something new to try", 6: "Something new for {occ_lower}"}
+         5: "Something new to try", 6: "{new_for}"}
+# slot 6 label per occasion: short enough for one line on a card (no "Something new for in season now")
+NEW_FOR = {"active / sport": "New for your workouts", "christmas / party season": "New for the festive weeks",
+           "summer vacation": "New for your holiday", "halloween": "New for Halloween",
+           "valentine's day": "New for Valentine's", "easter": "New for spring",
+           "mother's day": "New little treats", "in season now": "New this season",
+           "popular right now": "New this season"}
+NEW_FOR_DEFAULT = "Something new for you"
 N_SLOTS        = 6
 CAP_SHARE      = 0.20            # one product in at most 20% of the emails of a send
 SWIM_MAX       = 1               # at most 1 swimwear item per email
@@ -120,7 +127,7 @@ def prepare_send(d, taste, basket):
     trending = {k: allowed(v) for k, v in mt.build_trending(d).items()}
     trending = {k: v for k, v in trending.items() if len(v)}
 
-    names = dict(occ=occ["occasion"], occ_lower=str(occ["occasion"]).lower())
+    names = dict(occ=occ["occasion"], new_for=NEW_FOR.get(str(occ["occasion"]).lower(), NEW_FOR_DEFAULT))
     labels = {i: s.format(**names) for i, s in SLOTS.items()}
     print(f"send {d} | shelf {len(shelf):,} | occasion items {int(shelf['OCC'].sum()):,} ({occ['source']}) | "
           f"basket {len(bask)} | trending lists {len(trending)}")
